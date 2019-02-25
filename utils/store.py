@@ -5,6 +5,8 @@ class Store:
         pass
     def get(self, id):
         pass
+    def size(self):
+        pass
 
 class StoreFactory:
     @classmethod
@@ -26,7 +28,16 @@ class RedisStore:
         self.N += 1
 
     def get(self, id):
-        return self.client.get(id)
+        return self.client.hgetall(id)
+
+    def all(self):
+        resp = self.client.scan_iter('*')
+
+        for r in resp:
+            yield (r)
+
+    def size(self):
+        return self.N
 
 class TinyDbStore(Store):
 

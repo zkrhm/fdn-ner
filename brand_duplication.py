@@ -78,6 +78,7 @@ if __name__ == "__main__":
             # print(brand)
             brand_vec[i][j] = jaro_winkler(brand_map[i]['name_lower'], brand_map[j]['name_lower']) #sim check 
 
+
     sim_vec = np.tril(brand_vec,k=-1)
     dupl_idx = np.argwhere(sim_vec >= 1.).tolist()
     print("suspected duplicates:")

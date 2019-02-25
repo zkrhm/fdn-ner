@@ -26,8 +26,11 @@ class JaroModel(Model):
 class JaroWinklerModel(Model):
     def __init__(self, store:Store):
         self.store = store
+
+        
         self.N = self.store.size()
         self.vec = np.ndarray((self.N,self.N))
+        print("vector with size ({},{}) is built ".format(self.N,self.N))
 
 
     def update(self, idx, idy, get_word):
@@ -35,11 +38,28 @@ class JaroWinklerModel(Model):
             idx, idy : index x and y from enumerated shit
             get_word : a function to fetch the saved structure
         '''
-        ox = self.store.get(idx)
-        oy = self.store.get(idy)
+        # idx = int(idx.encode('utf-8'))
+        # idy = int(idy.encode('utf-8'))
+        print("index : ({} TYPE={}, {} TYPE={})".format(idx, type(idx), idy, type(idy)))
+        try:
+            idx = int(idx)
+            idy = int(idy)
 
-        #save distance:
-        self.vec[idx,idy] = jaro_winkler(get_word(ox),get_word(oy))
+            ox = self.store.get(str(idx))
+            oy = self.store.get(str(idy))
+
+            print("object ox, oy : ({},{})".format(ox,oy))
+            print("vec : {}".format(self.vec))
+            print("N : {} from store type ({})".format(self.store.size(), type(self.store)))
+            #save distance:
+            if len(self.vec) == 0:
+                self.N = self.store.size()
+                self.vec = np.ndarray((self.N, self.N))
+            self.vec[idx,idy] = jaro_winkler(get_word(ox),get_word(oy))
+        except Exception as e:
+            print("(idx : {} type : {})".format(idx, type(idx)))
+            raise e
+        
     
     def dump_to(self, path):
         fd = open(path,'w')
