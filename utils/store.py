@@ -21,11 +21,14 @@ class RedisStore:
         self.db = kwargs['db'] or 0
         self.client = Redis(host=self.host, port=int(self.port), db=int(self.db))
         self.id = None
-        self.N = 0
+        self.N = int(self.stored_keys()['db0']['keys'])
 
-    def store(self, data:dict):
-        self.client.hmset(self.N, data)
-        self.N += 1
+    def store(self, data:dict, key=None):
+        if key == None:
+            self.client.hmset(self.N, data)
+            self.N += 1
+        else:
+            self.client.hmset(key,data)
 
     def get(self, id):
         return self.client.hgetall(id)
@@ -38,6 +41,9 @@ class RedisStore:
 
     def size(self):
         return self.N
+
+    def stored_keys(self):
+        return self.client.info()
 
 class TinyDbStore(Store):
 
