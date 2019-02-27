@@ -67,9 +67,6 @@ class ProductUnduplicate:
     def brand_df(self):
         return pd.read_csv(os.path.join(CURDIR, 'data/ner-brands.csv'),header=0)
 
-    # @autojit
-
-
     def correlate(self):
         logger.debug("product vector \n : {} \ngetting tril index".format(self.product_vec))
         x_idx, y_idx = np.tril_indices(self.N)
@@ -77,11 +74,6 @@ class ProductUnduplicate:
             self.model.update(x_idx[i], y_idx[i],lambda w: w.name_lower)
         
         self.model.persist()
-
-        #ieu kudu dibenerkeun kulantaran lamun henteu pasalingsingan jeung naon? teuing.
-        #
-        # self.model.save_to(StoreFactory.create_store(host='localhost', port=3306, db='sim_vec', storeType='mem'))
-        # self.model.dump_to(os.path.join(CURDIR,'models/products-jero-wilkinks.bin'))
 
 
     def main(self):
@@ -91,10 +83,7 @@ class ProductUnduplicate:
         self.N = int(self.store.size())
         logger.debug("keys : {}".format(self.store.size()))
             
-        # raise Exception("check keys")
         if self.N == 0:
-            # logger.debug("LOADING DATA")
-            # self.load()
             pass
        
         self.product_vec = np.zeros((self.N,self.N)) #brand vec is matrix of size NxN , N is number of 
@@ -108,7 +97,6 @@ class ProductUnduplicate:
 
         raise Exception("End of training")
         
-
         # sim_vec = model.vec
         sim_vec = np.tril(self.model.vec,k=-1)
         dupl_idx = np.argwhere(sim_vec >= 1.).tolist()
