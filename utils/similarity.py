@@ -9,11 +9,11 @@ import logging
 from logging import Logger
 logger = logging.getLogger(name=__file__)
 
-class Model:
+class Similarity:
     def update(self, idx, idy):
         pass
 
-class JaroModel(Model):
+class JaroSim(Similarity):
     def __init__(self, store:Store):
         self.store = store
         self.N = self.store.size()
@@ -28,9 +28,7 @@ class JaroModel(Model):
         # self.vec[idx,idy] = 
         pass
 
-
-
-class JaroWinklerModel(Model):
+class JaroWinklerSim(Similarity):
     def __init__(self, store:Store):
         self.store = store
 
@@ -52,19 +50,26 @@ class JaroWinklerModel(Model):
             idx = int(idx)
             idy = int(idy)
 
+            if idx == idy :
+                return
+
             ox = self.store.get(str(idx))
             oy = self.store.get(str(idy))
+
+            if ox is None or oy is None:
+                return
 
             # logger.debug("object ox, oy : ({},{})".format(ox,oy))
             # logger.debug("vec : {}".format(self.vec))
             # logger.debug("N : {} from store type ({})".format(self.store.size(), type(self.store)))
 
             #save distance:
-            if len(self.vec) == 0:
-                self.N = self.store.size()
-                self.vec = np.zeros((self.N, self.N))
+            # if len(self.vec) == 0:
+            #     self.N = self.store.size()
+            #     self.vec = np.zeros((self.N, self.N))
 
-            self.vec[idx,idy] = jaro_winkler(get_word(ox),get_word(oy))
+            simi = jaro_winkler(get_word(ox),get_word(oy))
+            self.store.set_entry(idx,idy,simi)
         except Exception as e:
             logger.debug("(idx : {} type : {})".format(idx, type(idx)))
             raise e
@@ -72,22 +77,8 @@ class JaroWinklerModel(Model):
     # def to_mdl_index(self, x, y):
     #     return 'midx:{}:{}'.format(int(x),int(y)) #midx for matrix index
 
-    def save_to(self, storage: Store):
-        x_idx, y_idx = self.vec.nonzero()
-        for x,y in zip(x_idx,y_idx):
-
-            sim_fx_val = self.vec[x,y].astype(float)
-            x = int(x)
-            y = int(y)
-
-            print("x : {} , y : {} , f(x,y) : {}".format(x,y,sim_fx_val))
-            v = {
-                'x':x,
-                'y':y,
-                'sim': sim_fx_val
-            }
-            storage.store(v, key='midx:{}:{}'.format(x, y))
-            storage.store(v,key='{}:{}:{}'.format(sim_fx_val, x, y))
+    def persist(self):
+        self.store.persist()
 
     def dump_to(self, path):
         fd = open(path,'w')

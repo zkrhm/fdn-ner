@@ -5,8 +5,8 @@ import spacy
 from tinydb import TinyDB, Query
 import numpy as np
 from Levenshtein import jaro_winkler
-from utils.ds_model import JaroWinklerModel
-from utils.store import StoreFactory
+from utils.ds_model import JaroWinklerSim
+from utils.store import StoreFactory, MemStore
 from logging import Logger
 import logging
 # from numba import autojit, prange
@@ -24,9 +24,9 @@ logger.debug("creating store and model")
 class ProductUnduplicate:
 
     def __init__(self):
-        self.store = StoreFactory.create_store(host='localhost', port=6379, db=0, storeType='redis')
-        self.model = JaroWinklerModel(self.store)
-        self.N = 0
+        self.store = StoreFactory.create_store(host='naga.fdn', port=3306, db='product_vec', storeType='mem')
+        self.model = JaroWinklerSim(self.store)
+        self.N = self.store.size()
         self.product_vec = None
 
     def read_dbf(self):
@@ -35,9 +35,13 @@ class ProductUnduplicate:
 
     # @numba.jit(nopython=True, parallel=True)
     def load(self):
-        products = self.product_df()
+        products = self.product_df(sample=0.125)
+        # products = products.dropna()
         n = products.shape[0]
         i = 0
+
+        print("N products = {}".format(n))
+        Exception("Load break!")
         
         if self.N > 0:
             self.store.N = self.N
@@ -52,12 +56,13 @@ class ProductUnduplicate:
                     'name': row['product_name'],
                     'name_lower': str(row['product_name']).lower()
                 }
-                self.store.store(product.values)
+                
+                self.store.store(product)
                 i += 1
                 logger.info("progress : {}%".format( round((i/n) * 100, 2)  ))
 
-    def product_df(self):
-        return pd.read_csv(os.path.join(CURDIR, 'data/ner-products.csv'),header=0)
+    def product_df(self,sample=1.0):
+        return pd.read_csv(os.path.join(CURDIR, 'data/ner-products.csv'),header=0).sample(frac=sample)
 
     def brand_df(self):
         return pd.read_csv(os.path.join(CURDIR, 'data/ner-brands.csv'),header=0)
@@ -65,61 +70,41 @@ class ProductUnduplicate:
     # @autojit
 
 
-    def fill(self):
+    def correlate(self):
         logger.debug("product vector \n : {} \ngetting tril index".format(self.product_vec))
         x_idx, y_idx = np.tril_indices(self.N)
         for i in range(self.N):
-            self.model.update(x_idx[i], y_idx[i],lambda w: w[b'name_lower'].decode('utf-8'))
+            self.model.update(x_idx[i], y_idx[i],lambda w: w.name_lower)
+        
+        self.model.persist()
 
         #ieu kudu dibenerkeun kulantaran lamun henteu pasalingsingan jeung naon? teuing.
         #
-        self.model.save_to(StoreFactory.create_store(host='localhost', port=6379, db=1, storeType='redis'))
+        # self.model.save_to(StoreFactory.create_store(host='localhost', port=3306, db='sim_vec', storeType='mem'))
         # self.model.dump_to(os.path.join(CURDIR,'models/products-jero-wilkinks.bin'))
+
 
     def main(self):
         n = 0
         rdata = None
 
-        self.N = int(self.store.stored_keys()['db0']['keys'])
-        logger.debug("keys : {}".format(self.N))
-        
+        self.N = int(self.store.size())
+        logger.debug("keys : {}".format(self.store.size()))
+            
+        # raise Exception("check keys")
         if self.N == 0:
-            logger.debug("LOADING DATA")
-            self.load()
-
-        # if os.path.isfile(PRODUCT_DBF):
-        #     resp = input('File Exists, Overwrite ? (Yes\\No): ')
-        #     chosen = {
-        #         'y':True,
-        #         'yes': True,
-        #         'n':False,
-        #         'no': False
-        #     }[resp.strip().lower()]
-
-        #     if chosen :
-        #         #remove file and reload
-        #         os.remove(PRODUCT_DBF)
-        #         n, rdata = self.product_normalize()
-        #     else:
-        #         n, rdata = self.read_dbf()
-        # else:
-        #     n, rdata = self.product_normalize()
-        
-        # logger.debug("rdata : \n {}".format(rdata))
-        # #vectorize the brand.
-        logger.debug("creating product vector")
+            # logger.debug("LOADING DATA")
+            # self.load()
+            pass
+       
         self.product_vec = np.zeros((self.N,self.N)) #brand vec is matrix of size NxN , N is number of 
         product_map = {}
-        # for i, obj in enumerate(rdata):
-        #     product_map[i] = obj
-
-        # print(product_map)
 
         def get_word(w:dict):
             return w[b'name_lower'].decode('utf-8')
-        logger.debug("FILL the vector")
-        self.fill()
-        
+
+        logger.debug("CREATE & FILL the vector")
+        self.correlate()
 
         raise Exception("End of training")
         
@@ -140,4 +125,6 @@ class ProductUnduplicate:
 
 if __name__ == "__main__":
     engine = ProductUnduplicate()
-    engine.main()
+    # engine.load()
+    engine.correlate()
+    # engine.main()
