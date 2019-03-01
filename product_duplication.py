@@ -5,10 +5,11 @@ import spacy
 from tinydb import TinyDB, Query
 import numpy as np
 from Levenshtein import jaro_winkler
-from utils.ds_model import JaroWinklerSim
+from utils.similarity import JaroWinklerSim
 from utils.store import StoreFactory, MemStore
 from logging import Logger
 import logging
+import argparse
 # from numba import autojit, prange
 # import numba
 print("HELLO ANJENGG")
@@ -21,21 +22,28 @@ PRODUCT_DBF = os.path.join(CURDIR, 'db/products.json') #brand file path
 
 logger.debug("creating store and model")
 
+HOST = '127.0.0.1'
+STORETYPE = 'mem'
+
 class ProductUnduplicate:
 
     def __init__(self):
-        self.store = StoreFactory.create_store(host='naga.fdn', port=3306, db='product_vec', storeType='mem')
+        self.store = StoreFactory.create_store(host=HOST, port=3306, db='product_vec', storeType=STORETYPE)
         self.model = JaroWinklerSim(self.store)
-        self.N = self.store.size()
-        self.product_vec = None
+        try:
+            self.N = self.store.size()
+            self.product_vec = None
+        except Exception as e:
+            print("oh fuck. {}".format(e))
+        
 
     def read_dbf(self):
         # rdata = db.all()
         return self.store.N, [int(x) for x in self.store.all()]
 
     # @numba.jit(nopython=True, parallel=True)
-    def load(self):
-        products = self.product_df(sample=0.125)
+    def load(self,sample=1.0):
+        products = self.product_df(sample=sample)
         # products = products.dropna()
         n = products.shape[0]
         i = 0
@@ -50,16 +58,21 @@ class ProductUnduplicate:
             logger.info("load data faker!!!")
             for _, row in products.iterrows():
                 # print(row)
+                name = row['product_name']
+                if pd.isna(name):
+                    continue
+
                 product = {
                     'id': row['product_id'], 
                     'brand_id': row['brand_id'],
-                    'name': row['product_name'],
-                    'name_lower': str(row['product_name']).lower()
+                    'name': name,
+                    'name_lower': str(name).lower()
                 }
                 
                 self.store.store(product)
                 i += 1
                 logger.info("progress : {}%".format( round((i/n) * 100, 2)  ))
+            # self.store.persist()
 
     def product_df(self,sample=1.0):
         return pd.read_csv(os.path.join(CURDIR, 'data/ner-products.csv'),header=0).sample(frac=sample)
@@ -68,14 +81,46 @@ class ProductUnduplicate:
         return pd.read_csv(os.path.join(CURDIR, 'data/ner-brands.csv'),header=0)
 
     def correlate(self):
+
+        def pair(a, b):
+            len_a = len(a)
+            len_b = len(b)
+
+            if len_a != len_b:
+                raise Exception("len a shoule be equals to len b")
+            i = 0
+            for i in range(len_a):
+                yield (a[i], b[i])
+
+            
         logger.debug("product vector \n : {} \ngetting tril index".format(self.product_vec))
-        x_idx, y_idx = np.tril_indices(self.N)
-        for i in range(self.N):
-            self.model.update(x_idx[i], y_idx[i],lambda w: w.name_lower)
+        iprod1, iprod2 = np.tril_indices(self.N)
+
+        print("iprod1:{} , iprod2:{} ".format(iprod1, iprod2) )
+        # print("pairs : ({})".format([x for x in zip(iprod1, iprod2)]))
+        for i,j in pair(iprod1,iprod2):
+            logger.debug("index : ({},{})".format(i, j))
+            # self.model.update(i, j,lambda w: w.name_lower)
+            
+        # raise Exception("WALLA")
+        # for i in iprod1:
+        #     for j in iprod2:
+        #         print("(i:{}, j:{})".format(i,j))
+        #         self.model.update(i, j,lambda w: w.name_lower)
         
         self.model.persist()
 
-
+    def print_duplicates(self, score=0.5):
+        res = self.store.keys(score)
+        for x, y in res:
+            prod1 = self.store.get(x)
+            prod2 = self.store.get(y)
+            print(
+                "<PossibleDuplicates [PROD 1 : prod_name='{}' (ID={} BRAND={})] vs [PROD 2 : prod_name='{}' (ID={} BRAND={} )] >"\
+                    .format(\
+                        prod1.name, prod1.product_id, prod1.brand_id, \
+                        prod2.name, prod2.product_id, prod2.brand_id) \
+                )
     def main(self):
         n = 0
         rdata = None
@@ -96,7 +141,7 @@ class ProductUnduplicate:
         self.correlate()
 
         raise Exception("End of training")
-        
+
         # sim_vec = model.vec
         sim_vec = np.tril(self.model.vec,k=-1)
         dupl_idx = np.argwhere(sim_vec >= 1.).tolist()
@@ -109,10 +154,66 @@ class ProductUnduplicate:
             logger.info("[{}  (ID {})] vs [{} at (ID {})]".format(self.store.get(dupid0),dupid0,self.store.get(dupid1),dupid1))
         CURDIR = os.path.dirname(os.path.abspath(__file__))
 
-        
+class TableGen:
+
+    @classmethod
+    def generate(cls):
+        store = StoreFactory.create_store(host=HOST, port=3306, db='product_vec', storeType=STORETYPE)
+        store.generate()
+
 
 if __name__ == "__main__":
-    engine = ProductUnduplicate()
-    # engine.load()
-    engine.correlate()
+
+    
+    def get_engine():
+        return ProductUnduplicate()
+    print("HAI GOBLOOG")
+
+    def initdb_action(args):
+        print("generating..")
+        TableGen.generate()
+    
+    def load_action(args):
+        engine = get_engine()
+        print('loading...')
+        engine.load(sample=args.sample)
+
+    def train_action(args):
+        print('training..')
+        engine = get_engine()
+        engine.correlate()
+    
+    def printresult(args):
+        print("results:")
+        engine = get_engine()
+        engine.print_duplicates(score=args.min_score)
+
+    def default_action(args):
+        print("masuk sini bangsaat..")
+
+    parser = argparse.ArgumentParser(prog='cateye')
+    parser.set_defaults(func=default_action)
+    sparser = parser.add_subparsers(help="hello fuckers")
+    
+    gen_cmd = sparser.add_parser('initdb')
+    gen_cmd.set_defaults(func=initdb_action)
+
+
+    load_cmd = sparser.add_parser('load')
+    load_cmd.add_argument('sample',type=float)
+    load_cmd.set_defaults(func=load_action)
+
+    train_cmd = sparser.add_parser('train')
+    train_cmd.set_defaults(func=train_action)
+
+    show_cmd = sparser.add_parser('show')
+    show_cmd.add_argument('min-score',type=float)
+    show_cmd.set_defaults(func=printresult)
+    
+    # engine.load(sample=0.5)
+    # engine.correlate()
+    # engine.print_duplicates(score=.75)
     # engine.main()
+
+    args = parser.parse_args()
+    args.func(args)

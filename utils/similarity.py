@@ -29,6 +29,7 @@ class JaroSim(Similarity):
         pass
 
 class JaroWinklerSim(Similarity):
+    __method__ = 'jaro-winkler'
     def __init__(self, store:Store):
         self.store = store
 
@@ -59,23 +60,11 @@ class JaroWinklerSim(Similarity):
             if ox is None or oy is None:
                 return
 
-            # logger.debug("object ox, oy : ({},{})".format(ox,oy))
-            # logger.debug("vec : {}".format(self.vec))
-            # logger.debug("N : {} from store type ({})".format(self.store.size(), type(self.store)))
-
-            #save distance:
-            # if len(self.vec) == 0:
-            #     self.N = self.store.size()
-            #     self.vec = np.zeros((self.N, self.N))
-
             simi = jaro_winkler(get_word(ox),get_word(oy))
             self.store.set_entry(idx,idy,simi)
         except Exception as e:
             logger.debug("(idx : {} type : {})".format(idx, type(idx)))
             raise e
-
-    # def to_mdl_index(self, x, y):
-    #     return 'midx:{}:{}'.format(int(x),int(y)) #midx for matrix index
 
     def persist(self):
         self.store.persist()
