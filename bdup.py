@@ -6,8 +6,6 @@ from tinydb import TinyDB, Query
 import numpy as np
 from Levenshtein import jaro_winkler
 
-
-
 CURDIR = os.path.dirname(os.path.abspath(__file__))
 BRAND_DBF = os.path.join(CURDIR, 'db/brands.json') #brand file path
 db = TinyDB(BRAND_DBF)
