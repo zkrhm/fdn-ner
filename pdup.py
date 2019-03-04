@@ -10,6 +10,7 @@ from utils.store import StoreFactory, MemStore
 from logging import Logger
 import logging
 import argparse
+from datetime import datetime
 # from numba import autojit, prange
 # import numba
 print("HELLO ANJENGG")
@@ -98,9 +99,15 @@ class ProductUnduplicate:
 
         print("iprod1:{} , iprod2:{} ".format(iprod1, iprod2) )
         # print("pairs : ({})".format([x for x in zip(iprod1, iprod2)]))
-        for i,j in pair(iprod1,iprod2):
+        mprod = np.array((iprod1,iprod2))
+        #transpose
+        tprod = mprod.T
+        t1 = datetime.now()
+        for i,j in tprod:
             logger.debug("index : ({},{})".format(i, j))
             # self.model.update(i, j,lambda w: w.name_lower)
+        t2 = datetime.now()
+        print("time delta : {}".format((t2-t1).strftime('%H:%M:%S')))
             
         # raise Exception("WALLA")
         # for i in iprod1:
