@@ -5,15 +5,17 @@ import spacy
 from tinydb import TinyDB, Query
 import numpy as np
 from Levenshtein import jaro_winkler
-from utils.similarity import JaroWinklerSim
+from utils.similarity import JaroWinklerSim, Similarity 
 from utils.store import StoreFactory, MemStore
 from logging import Logger
 import logging, copy, argparse
 from datetime import datetime
 import json, asyncio, _thread, time
+from celery import Task, Celery
+import celery
 # from numba import autojit, prange
 # import numba
-print("HELLO ANJENGG")
+
 logging.basicConfig(level=logging.DEBUG)
 logger = logging.getLogger(name="FDN product dup")
 
@@ -23,8 +25,37 @@ PRODUCT_DBF = os.path.join(CURDIR, 'db/products.json') #brand file path
 
 logger.debug("creating store and model")
 
-HOST = 'naga.fdn'
+HOST = '127.0.0.1'
 STORETYPE = 'mem'
+REDIS_HOST = 'redis://{}'.format(HOST)
+
+celery_app = Celery('fdn_produp',broker=REDIS_HOST)
+celery_app.conf.update({
+    'broker_url': REDIS_HOST,
+    'broker_transport_options': {
+        'data_folder_in': os.path.join(CURDIR, 'out'),
+        'data_folder_out': os.path.join(CURDIR, 'out'),
+        'data_folder_processed': os.path.join(CURDIR, 'processed')
+    },
+    'imports': ('pdup',),
+    'result_persistent': False,
+    'task_serializer': 'json',
+    'result_serializer': 'json',
+    'accept_content': ['json']})
+
+class Runner(Task):
+    def __init__(self, poarr, model, i):
+        self.payloads = poarr
+        
+        self.model = model
+        self.proc_num = i
+        self.name = 'fdn_produp'
+
+    def run(self):
+        for p in self.payloads:
+            i,j = p
+            self.model.update(i, j,lambda w: w.name_lower)
+            # time.sleep(0.5)
 
 class ProductUnduplicate:
 
@@ -99,6 +130,19 @@ class ProductUnduplicate:
             i += 1
         self.model.persist()
 
+    def job_process(self, tprod):
+
+
+
+        i = 0 
+        oarr = np.array_split(tprod,500)
+        for o in oarr:
+            celery_app.tasks.register(Runner(o, ProductUnduplicate().model, i))
+            r = Runner(o, ProductUnduplicate().model, i)
+            r.delay(123)
+            
+            i += 1
+
     def async_process(self, tprod):
         t1 = datetime.now()
         print("tprod : {}".format(tprod))
@@ -159,7 +203,8 @@ class ProductUnduplicate:
         #transpose
         tprod = mprod.T
 
-        self.thread_process(tprod)
+        # self.thread_process(tprod)
+        self.job_process(tprod)
         
 
     def print_duplicates(self, score=0.5):
