@@ -3,9 +3,9 @@ from utils.store import Store
 import numpy as np
 
 from Levenshtein import jaro_winkler
+from datetime import datetime
 import pickle
-import logging
-
+import logging, time
 from logging import Logger
 logger = logging.getLogger(name=__file__)
 
@@ -46,7 +46,8 @@ class JaroWinklerSim(Similarity):
         '''
         # idx = int(idx.encode('utf-8'))
         # idy = int(idy.encode('utf-8'))
-        logger.debug("index : ({} TYPE={}, {} TYPE={})".format(idx, type(idx), idy, type(idy)))
+        # logger.debug("index : ({} TYPE={}, {} TYPE={})".format(idx, type(idx), idy, type(idy)))
+        stime = datetime.now()
         try:
             idx = int(idx)
             idy = int(idy)
@@ -59,12 +60,20 @@ class JaroWinklerSim(Similarity):
 
             if ox is None or oy is None:
                 return
+            w1 = get_word(ox)
+            w2 = get_word(oy)
+            simi = jaro_winkler(w1,w2)
 
-            simi = jaro_winkler(get_word(ox),get_word(oy))
+            logger.debug("({},{}) vs ({},{}) : {}".format(idx, w1, idy, w2, simi))
+
             self.store.set_entry(idx,idy,simi)
+
         except Exception as e:
             logger.debug("(idx : {} type : {})".format(idx, type(idx)))
             raise e
+        ntime = datetime.now()
+
+        logger.debug("processing time : {}".format(ntime-stime))
 
     def persist(self):
         self.store.persist()

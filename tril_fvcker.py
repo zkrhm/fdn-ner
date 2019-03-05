@@ -3,13 +3,14 @@ import asyncio
 import json
 
 def async_test():
-    sample = 0.5
+    sample = 0.25
     arr = np.arange(40000*sample)
     vecs = np.array((arr[::20][:10],arr[::50][:10]))
     tvecs = vecs.T
 
-    async def the_func(params):
+    async def the_func(name, params):
         oparams = json.loads(params)
+        print("demarsh: {}".format(oparams))
         for p in oparams:
             print("processing : {}".format(p))
             await asyncio.sleep(1.)
@@ -21,10 +22,10 @@ def async_test():
         o_json = json.dumps(o_arr.tolist())
         print("o[arr] : {} , type: {}".format(o_arr, type(o_arr)))
         print("o[json] : {}, type : {}".format(o_json, type(o_json)))
-        coros.append(the_func(o_json))
+        coros.append(the_func("hello",o_json))
     loop = asyncio.get_event_loop()
     loop.run_until_complete(asyncio.gather(
-        coros
+        *coros 
     ))
     loop.close()
 

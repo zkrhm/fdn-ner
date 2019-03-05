@@ -8,9 +8,9 @@ from Levenshtein import jaro_winkler
 from utils.similarity import JaroWinklerSim
 from utils.store import StoreFactory, MemStore
 from logging import Logger
-import logging
-import argparse
+import logging, copy, argparse
 from datetime import datetime
+import json, asyncio, _thread, time
 # from numba import autojit, prange
 # import numba
 print("HELLO ANJENGG")
@@ -23,7 +23,7 @@ PRODUCT_DBF = os.path.join(CURDIR, 'db/products.json') #brand file path
 
 logger.debug("creating store and model")
 
-HOST = '127.0.0.1'
+HOST = 'naga.fdn'
 STORETYPE = 'mem'
 
 class ProductUnduplicate:
@@ -81,6 +81,62 @@ class ProductUnduplicate:
     def brand_df(self):
         return pd.read_csv(os.path.join(CURDIR, 'data/ner-brands.csv'),header=0)
 
+    def thread_process(self, tprod):
+
+        def process(poarr, pu, i):
+            for p in poarr:
+                i,j = p
+                logger.debug("Process number {} ------------".format(i))
+                pu.model.update(i, j,lambda w: w.name_lower)
+                time.sleep(0.5)
+                logger.debug("End of {} ---------------------".format(i))
+
+        oarrs = np.array_split(tprod,1000)
+        i = 0
+        for oarr in oarrs:
+            pu = ProductUnduplicate()
+            _thread.start_new_thread(process, (oarr, pu, i))
+            i += 1
+        self.model.persist()
+
+    def async_process(self, tprod):
+        t1 = datetime.now()
+        print("tprod : {}".format(tprod))
+
+        async def the_func(name, params, pu:ProductUnduplicate):
+            oparams = json.loads(params)
+            print("demarsh: {}".format(oparams))
+            for p in oparams:
+                print("processing : {}".format(p))
+                i = p[0]
+                j = p[1]
+                pu.model.update(i, j,lambda w: w.name_lower)
+                await asyncio.sleep(1.)
+        coros = []
+        oarr = np.array_split(tprod,500)
+        for o in oarr:
+            o_arr = np.array(o)
+            o_json = json.dumps(o_arr.tolist())
+            print("o[arr] : {} , type: {}".format(o_arr, type(o_arr)))
+            print("o[json] : {}, type : {}".format(o_json, type(o_json)))
+            coros.append(
+                asyncio.ensure_future(the_func("hello",o_json,self))
+                )
+
+        loop = asyncio.get_event_loop()
+        loop.run_until_complete(asyncio.gather(
+            *coros 
+        ))
+        loop.close()
+
+        # for i,j in tprod:
+        #     logger.debug("index : ({},{})".format(i, j))
+        #     # 
+        # t2 = datetime.now()
+        # print("time delta : {}".format((t2-t1).strftime('%H:%M:%S')))
+        
+        self.model.persist()
+
     def correlate(self):
 
         def pair(a, b):
@@ -102,20 +158,9 @@ class ProductUnduplicate:
         mprod = np.array((iprod1.astype(np.float16),iprod2.astype(np.float16)),dtype=np.float16)
         #transpose
         tprod = mprod.T
-        t1 = datetime.now()
-        for i,j in tprod:
-            logger.debug("index : ({},{})".format(i, j))
-            # self.model.update(i, j,lambda w: w.name_lower)
-        t2 = datetime.now()
-        print("time delta : {}".format((t2-t1).strftime('%H:%M:%S')))
-            
-        # raise Exception("WALLA")
-        # for i in iprod1:
-        #     for j in iprod2:
-        #         print("(i:{}, j:{})".format(i,j))
-        #         self.model.update(i, j,lambda w: w.name_lower)
+
+        self.thread_process(tprod)
         
-        self.model.persist()
 
     def print_duplicates(self, score=0.5):
         res = self.store.keys(score)
