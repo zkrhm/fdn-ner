@@ -99,7 +99,7 @@ class ProductUnduplicate:
 
         print("iprod1:{} , iprod2:{} ".format(iprod1, iprod2) )
         # print("pairs : ({})".format([x for x in zip(iprod1, iprod2)]))
-        mprod = np.array((iprod1,iprod2))
+        mprod = np.array((iprod1.astype(np.float16),iprod2.astype(np.float16)),dtype=np.float16)
         #transpose
         tprod = mprod.T
         t1 = datetime.now()
