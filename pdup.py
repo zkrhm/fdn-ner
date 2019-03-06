@@ -13,6 +13,8 @@ from datetime import datetime
 import json, asyncio, _thread, time
 from celery import Task, Celery
 import celery
+from multiprocessing import Process, Pipe
+from multiprocessing.pool import Pool
 # from numba import autojit, prange
 # import numba
 
@@ -100,8 +102,13 @@ class ProductUnduplicate:
                     'name': name,
                     'name_lower': str(name).lower()
                 }
+
+                try:
+                    self.store.store(product)
+                except Exception as e:
+                    logger.warning("skipping : {} get exception: {}".format(product, e))
                 
-                self.store.store(product)
+                
                 i += 1
                 logger.info("progress : {}%".format( round((i/n) * 100, 2)  ))
             # self.store.persist()
@@ -130,9 +137,47 @@ class ProductUnduplicate:
             i += 1
         self.model.persist()
 
+    def osmemory_process(self, tprod):
+        '''
+            using multiple process (separated memory block)
+        '''
+        def process_fn(poarr, pu, i):
+            '''
+                processing function (core: update the model)
+            '''
+            for p in poarr:
+                i,j = p
+                logger.debug("Process number {} ------------".format(i))
+                pu.model.update(i, j,lambda w: w.name_lower)
+                # time.sleep(0.5)
+                logger.debug("End of {} ---------------------".format(i))
+            
+            pu.model.persist()
+
+        i = 0
+        N = self.store.size()
+        NPROC = 1000
+        oarr = np.array_split(tprod,int(N/NPROC))
+        
+        ps = []
+        for o in oarr:
+            p = Process(target=process_fn, args=(o, ProductUnduplicate(), i,),daemon=True)
+            ps.append(p)   
+            ps[i].start()
+            i+=1
+
+        logger.debug('n of process: {}'.format(len(oarr)))
+
+        # for p in ps:
+        #     p.join()
+
+        # with Pool(processes=25) as pool:
+        #     logger.debug("running pool...")
+        #     for o in oarr:
+        #         pool.apply_async(process_fn, (o, ProductUnduplicate(), i,))
+        #         i+=1
+
     def job_process(self, tprod):
-
-
 
         i = 0 
         oarr = np.array_split(tprod,500)
@@ -204,7 +249,7 @@ class ProductUnduplicate:
         tprod = mprod.T
 
         # self.thread_process(tprod)
-        self.job_process(tprod)
+        self.osmemory_process(tprod)
         
 
     def print_duplicates(self, score=0.5):

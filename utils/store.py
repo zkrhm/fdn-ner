@@ -56,8 +56,8 @@ class MemStore:
         self.host = kwargs['host']
         self.port = kwargs['port']
         self.db = kwargs['db']
-
-        self.engine = create_engine('mysql+mysqldb://root@{}:{}/{}'.format(self.host, self.port, self.db))
+        # charset=utf8', encoding='utf-8'
+        self.engine = create_engine('mysql+mysqldb://root@{}:{}/{}?charset=utf8'.format(self.host, self.port, self.db),encoding='utf-8')
         # self.conn = self.engine.connect()
         Session = sessionmaker(bind=self.engine)
         self.session = Session()
