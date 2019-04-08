@@ -5,7 +5,7 @@ import spacy
 from tinydb import TinyDB, Query
 import numpy as np
 from Levenshtein import jaro_winkler
-from utils.similarity import JaroWinklerSim, Similarity 
+from utils.similarity import JaroWinklerSim, Similarity, JaroSim
 from utils.store import StoreFactory, MemStore
 from logging import Logger
 import logging, copy, argparse
@@ -64,6 +64,10 @@ class ProductUnduplicate:
     def __init__(self):
         self.store = StoreFactory.create_store(host=HOST, port=3306, db='product_vec', storeType=STORETYPE)
         self.model = JaroWinklerSim(self.store)
+        self.models = [
+            JaroWinklerSim(self.store),
+            JaroSim(self.store)
+        ]
         try:
             self.N = self.store.size()
             self.product_vec = None
@@ -148,7 +152,9 @@ class ProductUnduplicate:
             for p in poarr:
                 i,j = p
                 logger.debug("Process number {} ------------".format(i))
-                pu.model.update(i, j,lambda w: w.name_lower)
+                # pu.model.update(i, j,lambda w: w.name_lower)
+                for model in pu.models:
+                    model.update(i, j, lambda w: w.name_lower)
                 # time.sleep(0.5)
                 logger.debug("End of {} ---------------------".format(i))
             
@@ -161,6 +167,7 @@ class ProductUnduplicate:
         
         ps = []
         for o in oarr:
+            #process is from python's multiprocessing module. 
             p = Process(target=process_fn, args=(o, ProductUnduplicate(), i,),daemon=True)
             ps.append(p)
             ps[i].start()
