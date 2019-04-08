@@ -39,8 +39,8 @@ def split_test():
     def fn(p,q):
         return p+q
     vfn = np.vectorize(fn)
-
-    print("sianjing:\n\n\n{}".format(np.array_split(tvecs,4)))
+    sres = np.array_split(tvecs,2)
+    print("sianjing:\n\n\n{}\n\nlen : {}".format(sres , len(sres)))
 
 def tril_test():
     sample = 1.0
@@ -66,7 +66,7 @@ def tolist_test():
     # print()
 
 if __name__ == "__main__":
-    async_test()
+    split_test()
 
     # print("first pair :\n{}".format(pair.T))
     # for i in tril: 

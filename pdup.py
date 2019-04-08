@@ -156,26 +156,17 @@ class ProductUnduplicate:
 
         i = 0
         N = self.store.size()
-        NPROC = 1000
-        oarr = np.array_split(tprod,int(N/NPROC))
+        NPROC = 100
+        oarr = np.array_split(tprod,int(NPROC))
         
         ps = []
         for o in oarr:
             p = Process(target=process_fn, args=(o, ProductUnduplicate(), i,),daemon=True)
-            ps.append(p)   
+            ps.append(p)
             ps[i].start()
             i+=1
 
         logger.debug('n of process: {}'.format(len(oarr)))
-
-        # for p in ps:
-        #     p.join()
-
-        # with Pool(processes=25) as pool:
-        #     logger.debug("running pool...")
-        #     for o in oarr:
-        #         pool.apply_async(process_fn, (o, ProductUnduplicate(), i,))
-        #         i+=1
 
     def job_process(self, tprod):
 
